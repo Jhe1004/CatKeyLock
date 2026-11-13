@@ -108,5 +108,41 @@ struct RenderPreviews {
             appearanceName: .darkAqua,
             outputURL: outDir.appendingPathComponent("preview_hud_locked.png")
         )
+
+        // 5. 英文浅色 - 已授权待命态
+        let vm5 = SettingsViewModel(previewState: .init(
+            isAccessibilityGranted: true,
+            isTapActive: true,
+            isLocked: false,
+            sessionBlockedCount: 0,
+            totalBlockedCount: 38,
+            playSoundOnToggle: true,
+            launchAtLogin: true,
+            language: .en
+        ))
+        renderViewToPNG(
+            SettingsContentView(viewModel: vm5),
+            appearanceName: .aqua,
+            width: 500,
+            outputURL: outDir.appendingPathComponent("preview_ready_en_light.png")
+        )
+
+        // 6. 英文深色 - 锁定中且拦截 12 次
+        let vm6 = SettingsViewModel(previewState: .init(
+            isAccessibilityGranted: true,
+            isTapActive: true,
+            isLocked: true,
+            sessionBlockedCount: 12,
+            totalBlockedCount: 147,
+            lockLocalMouseToo: true,
+            playSoundOnToggle: true,
+            language: .en
+        ))
+        renderViewToPNG(
+            SettingsContentView(viewModel: vm6),
+            appearanceName: .darkAqua,
+            width: 500,
+            outputURL: outDir.appendingPathComponent("preview_locked_en_dark.png")
+        )
     }
 }

@@ -146,19 +146,34 @@ struct KeyCombo: Codable, Equatable, Hashable {
     ]
 }
 
+enum AppLanguage: String, Codable, CaseIterable, Equatable {
+    case zhHans = "zh-Hans"
+    case en = "en"
+}
+
 enum KeyComboValidationError: Error, Equatable {
     case modifierOnly
     case missingPrimaryModifier
     case systemConflict(String)
 
     var message: String {
-        switch self {
-        case .modifierOnly:
+        message(for: .zhHans)
+    }
+
+    func message(for language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.modifierOnly, .zhHans):
             return "请同时按下一个非修饰主键（如 L、K、Space 等）。"
-        case .missingPrimaryModifier:
+        case (.modifierOnly, .en):
+            return "Please include a non-modifier primary key (e.g., L, K, Space)."
+        case (.missingPrimaryModifier, .zhHans):
             return "请至少包含 ⌃(Control)、⌥(Option) 或 ⌘(Command) 中的一个修饰键，以免影响正常打字。"
-        case .systemConflict(let name):
+        case (.missingPrimaryModifier, .en):
+            return "Include at least one primary modifier (⌃ Control, ⌥ Option, or ⌘ Command) so normal typing is unaffected."
+        case (.systemConflict(let name), .zhHans):
             return "组合键 \(name) 与系统常用快捷键冲突，请换一个组合。"
+        case (.systemConflict(let name), .en):
+            return "Shortcut \(name) conflicts with a reserved system shortcut. Please choose another."
         }
     }
 }
@@ -170,6 +185,7 @@ final class AppPreferences {
         static let lockLocalMouseToo = "CatKeyLock.lockLocalMouseToo"
         static let playSoundOnToggle = "CatKeyLock.playSoundOnToggle"
         static let hasLaunchedBefore = "CatKeyLock.hasLaunchedBefore"
+        static let language = "CatKeyLock.language"
     }
 
     private let defaults: UserDefaults
@@ -221,5 +237,20 @@ final class AppPreferences {
     var hasLaunchedBefore: Bool {
         get { defaults.bool(forKey: Keys.hasLaunchedBefore) }
         set { defaults.set(newValue, forKey: Keys.hasLaunchedBefore) }
+    }
+
+    var language: AppLanguage {
+        get {
+            guard let raw = defaults.string(forKey: Keys.language),
+                  let parsed = AppLanguage(rawValue: raw) else {
+                return .zhHans
+            }
+            return parsed
+        }
+        set {
+            guard newValue != language else { return }
+            defaults.set(newValue.rawValue, forKey: Keys.language)
+            onChange?()
+        }
     }
 }

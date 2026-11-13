@@ -15,7 +15,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var toggleMenuItem: NSMenuItem!
     private var lockMouseMenuItem: NSMenuItem!
     private var playSoundMenuItem: NSMenuItem!
+    private var languageMenuItem: NSMenuItem!
+    private var zhLanguageMenuItem: NSMenuItem!
+    private var enLanguageMenuItem: NSMenuItem!
+    private var settingsMenuItem: NSMenuItem!
     private var launchAtLoginMenuItem: NSMenuItem!
+    private var quitMenuItem: NSMenuItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 避免重复启动多个实例
@@ -59,22 +64,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let lang = preferences.language
 
         let menu = NSMenu()
         menu.delegate = self
 
-        statusMenuItem = NSMenuItem(title: "状态：本地键盘正常", action: #selector(openSettings), keyEquivalent: "")
+        statusMenuItem = NSMenuItem(title: L10n.menuStatusNormal(shortcut: preferences.shortcut.displayString, lang), action: #selector(openSettings), keyEquivalent: "")
         statusMenuItem.target = self
         menu.addItem(statusMenuItem)
 
-        toggleMenuItem = NSMenuItem(title: "立即锁定物理键盘", action: #selector(toggleLockFromMenu), keyEquivalent: "")
+        toggleMenuItem = NSMenuItem(title: L10n.menuToggleLock(shortcut: preferences.shortcut.displayString, lang), action: #selector(toggleLockFromMenu), keyEquivalent: "")
         toggleMenuItem.target = self
         menu.addItem(toggleMenuItem)
 
         menu.addItem(.separator())
 
         lockMouseMenuItem = NSMenuItem(
-            title: "锁定时同时屏蔽内置触控板（不影响鼠标）",
+            title: L10n.menuBlockTrackpad(lang),
             action: #selector(toggleLockMouse),
             keyEquivalent: ""
         )
@@ -82,23 +88,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(lockMouseMenuItem)
 
         playSoundMenuItem = NSMenuItem(
-            title: "切换时播放提示音",
+            title: L10n.menuPlaySound(lang),
             action: #selector(togglePlaySound),
             keyEquivalent: ""
         )
         playSoundMenuItem.target = self
         menu.addItem(playSoundMenuItem)
 
-        let settingsItem = NSMenuItem(
-            title: "快捷键与权限设置...",
+        languageMenuItem = NSMenuItem(title: L10n.menuLanguageTitle(lang), action: nil, keyEquivalent: "")
+        let languageSubmenu = NSMenu()
+        zhLanguageMenuItem = NSMenuItem(title: "简体中文", action: #selector(selectChineseLanguage), keyEquivalent: "")
+        zhLanguageMenuItem.target = self
+        languageSubmenu.addItem(zhLanguageMenuItem)
+
+        enLanguageMenuItem = NSMenuItem(title: "English", action: #selector(selectEnglishLanguage), keyEquivalent: "")
+        enLanguageMenuItem.target = self
+        languageSubmenu.addItem(enLanguageMenuItem)
+        languageMenuItem.submenu = languageSubmenu
+        menu.addItem(languageMenuItem)
+
+        settingsMenuItem = NSMenuItem(
+            title: L10n.menuSettings(lang),
             action: #selector(openSettings),
             keyEquivalent: ","
         )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
+        settingsMenuItem.target = self
+        menu.addItem(settingsMenuItem)
 
         launchAtLoginMenuItem = NSMenuItem(
-            title: "开机自动启动",
+            title: L10n.menuLaunchAtLogin(lang),
             action: #selector(toggleLaunchAtLogin),
             keyEquivalent: ""
         )
@@ -107,9 +125,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "退出防猫锁键", action: #selector(quitApp), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
+        quitMenuItem = NSMenuItem(title: L10n.menuQuit(lang), action: #selector(quitApp), keyEquivalent: "q")
+        quitMenuItem.target = self
+        menu.addItem(quitMenuItem)
 
         statusItem.menu = menu
     }
@@ -137,7 +155,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.hudController.show(
                     locked: locked,
                     shortcutDisplay: self.preferences.shortcut.displayString,
-                    mouseLocked: self.preferences.lockLocalMouseToo
+                    mouseLocked: self.preferences.lockLocalMouseToo,
+                    language: self.preferences.language
                 )
                 self.playToggleSound(locked: locked)
             }
@@ -160,25 +179,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem.button else { return }
         let locked = lockManager.stateMachine.isLocked
         let ready = lockManager.isAccessibilityGranted && lockManager.isTapActive
+        let lang = preferences.language
+        let shortcutText = preferences.shortcut.displayString
+        let accessibilityDesc = L10n.statusBarAccessibilityDescription(locked: locked, ready: ready, lang: lang)
 
         if locked {
-            let image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: "物理键盘已锁定")
+            let image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: accessibilityDesc)
             image?.isTemplate = true
             button.image = image
-            button.title = " 已锁键"
-            button.toolTip = "防猫锁键：物理键盘已锁定（按 \(preferences.shortcut.displayString) 解锁）"
+            button.title = L10n.statusBarButtonLockedTitle(lang)
+            button.toolTip = L10n.statusBarTooltipLocked(shortcut: shortcutText, lang)
         } else if !ready {
-            let image = NSImage(systemSymbolName: "cat.fill", accessibilityDescription: "等待辅助功能授权")
+            let image = NSImage(systemSymbolName: "cat.fill", accessibilityDescription: accessibilityDesc)
             image?.isTemplate = true
             button.image = image
-            button.title = " 待授权"
-            button.toolTip = "防猫锁键：尚未授予辅助功能权限，点击打开设置"
+            button.title = L10n.statusBarButtonSetupTitle(lang)
+            button.toolTip = L10n.statusBarTooltipSetup(lang)
         } else {
-            let image = NSImage(systemSymbolName: "cat.fill", accessibilityDescription: "防猫锁键待命中")
+            let image = NSImage(systemSymbolName: "cat.fill", accessibilityDescription: accessibilityDesc)
             image?.isTemplate = true
             button.image = image
             button.title = ""
-            button.toolTip = "防猫锁键：按 \(preferences.shortcut.displayString) 锁定本地物理键盘"
+            button.toolTip = L10n.statusBarTooltipStandby(shortcut: shortcutText, lang)
         }
 
         updateStatusMenuItems()
@@ -188,24 +210,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let locked = lockManager.stateMachine.isLocked
         let ready = lockManager.isAccessibilityGranted && lockManager.isTapActive
         let shortcutText = preferences.shortcut.displayString
+        let lang = preferences.language
 
         if !ready {
-            statusMenuItem.title = "⚠️ 需授予“辅助功能”权限（点击前往设置）"
+            statusMenuItem.title = L10n.menuStatusUnauthorized(lang)
         } else if locked {
             let blocked = lockManager.stateMachine.blockedCountThisSession
-            statusMenuItem.title = "🔒 已锁定本地键盘（本次拦截 \(blocked) 次）"
+            statusMenuItem.title = L10n.menuStatusLocked(blocked: blocked, lang)
         } else {
-            statusMenuItem.title = "⌨️ 本地键盘正常（快捷键 \(shortcutText)）"
+            statusMenuItem.title = L10n.menuStatusNormal(shortcut: shortcutText, lang)
         }
 
         toggleMenuItem.title = locked
-            ? "解锁物理键盘（\(shortcutText)）"
-            : "立即锁定物理键盘（\(shortcutText)）"
+            ? L10n.menuToggleUnlock(shortcut: shortcutText, lang)
+            : L10n.menuToggleLock(shortcut: shortcutText, lang)
         toggleMenuItem.isEnabled = ready
 
+        lockMouseMenuItem.title = L10n.menuBlockTrackpad(lang)
         lockMouseMenuItem.state = preferences.lockLocalMouseToo ? .on : .off
+
+        playSoundMenuItem.title = L10n.menuPlaySound(lang)
         playSoundMenuItem.state = preferences.playSoundOnToggle ? .on : .off
+
+        languageMenuItem.title = L10n.menuLanguageTitle(lang)
+        zhLanguageMenuItem.state = (lang == .zhHans) ? .on : .off
+        enLanguageMenuItem.state = (lang == .en) ? .on : .off
+
+        settingsMenuItem.title = L10n.menuSettings(lang)
+
+        launchAtLoginMenuItem.title = L10n.menuLaunchAtLogin(lang)
         launchAtLoginMenuItem.state = (SMAppService.mainApp.status == .enabled) ? .on : .off
+
+        quitMenuItem.title = L10n.menuQuit(lang)
     }
 
     private func playToggleSound(locked: Bool) {
@@ -226,6 +262,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func togglePlaySound() {
         preferences.playSoundOnToggle.toggle()
+    }
+
+    @objc private func selectChineseLanguage() {
+        preferences.language = .zhHans
+    }
+
+    @objc private func selectEnglishLanguage() {
+        preferences.language = .en
     }
 
     @objc private func openSettings() {

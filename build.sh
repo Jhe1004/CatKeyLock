@@ -17,6 +17,7 @@ mkdir -p "$BUILD_DIR"
 echo "==> [1/5] 编译并运行单元测试..."
 swiftc -swift-version 5 -O -target "$TARGET" \
     "$ROOT_DIR/Sources/KeyCombo.swift" \
+    "$ROOT_DIR/Sources/Localization.swift" \
     "$ROOT_DIR/Sources/KeyboardLockEngine.swift" \
     "$ROOT_DIR/Tests/RunTests.swift" \
     -o "$TEST_BIN"

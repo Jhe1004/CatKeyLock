@@ -5,25 +5,18 @@ struct HUDBannerView: View {
     let locked: Bool
     let shortcutDisplay: String
     let mouseLocked: Bool
+    var language: AppLanguage = .zhHans
 
     private var accentColor: Color {
         locked ? .orange : .green
     }
 
     private var titleText: String {
-        if locked {
-            return mouseLocked ? "物理键盘与触控板已锁定" : "物理键盘已锁定（防猫模式）"
-        }
-        return "物理键盘已解锁"
+        L10n.hudTitle(locked: locked, mouseLocked: mouseLocked, language)
     }
 
     private var subtitleText: String {
-        if locked {
-            return mouseLocked
-                ? "外接鼠标与远程控制正常可用 · 再按 \(shortcutDisplay) 解锁"
-                : "远程控制正常可用 · 再按 \(shortcutDisplay) 解锁"
-        }
-        return "本地键盘输入已恢复正常"
+        L10n.hudSubtitle(locked: locked, mouseLocked: mouseLocked, shortcut: shortcutDisplay, language)
     }
 
     var body: some View {
@@ -66,7 +59,7 @@ struct HUDBannerView: View {
                 )
         }
         .padding(.horizontal, 16)
-        .frame(width: 420, height: 76)
+        .frame(width: 440, height: 76)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -82,19 +75,20 @@ final class HUDController {
     private var hostingView: NSHostingView<HUDBannerView>?
     private var hideWorkItem: DispatchWorkItem?
 
-    func show(locked: Bool, shortcutDisplay: String, mouseLocked: Bool) {
+    func show(locked: Bool, shortcutDisplay: String, mouseLocked: Bool, language: AppLanguage = .zhHans) {
         DispatchQueue.main.async { [weak self] in
-            self?.presentHUD(locked: locked, shortcutDisplay: shortcutDisplay, mouseLocked: mouseLocked)
+            self?.presentHUD(locked: locked, shortcutDisplay: shortcutDisplay, mouseLocked: mouseLocked, language: language)
         }
     }
 
-    private func presentHUD(locked: Bool, shortcutDisplay: String, mouseLocked: Bool) {
+    private func presentHUD(locked: Bool, shortcutDisplay: String, mouseLocked: Bool, language: AppLanguage) {
         hideWorkItem?.cancel()
 
         let banner = HUDBannerView(
             locked: locked,
             shortcutDisplay: shortcutDisplay,
-            mouseLocked: mouseLocked
+            mouseLocked: mouseLocked,
+            language: language
         )
         let panel = ensurePanel(initialView: banner)
         hostingView?.rootView = banner
@@ -146,7 +140,7 @@ final class HUDController {
             return existing
         }
 
-        let width: CGFloat = 420
+        let width: CGFloat = 440
         let height: CGFloat = 76
         let newPanel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),

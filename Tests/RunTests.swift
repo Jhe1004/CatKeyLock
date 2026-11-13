@@ -82,7 +82,8 @@ struct RunTests {
         testRemoteControlAllowedWhileLocked()
         testAutorepeatAndDebounceProtection()
         testTrackpadBlockedWhileExternalMouseAllowed()
-        print("ALL 8 TEST SUITES PASSED")
+        testLanguagePreferenceDefaultAndSwitch()
+        print("ALL 9 TEST SUITES PASSED")
     }
 
     // 1. 默认快捷键格式化与组合键合法性校验
@@ -264,5 +265,32 @@ struct RunTests {
         // 3) 远程控制鼠标依然 100% 放行
         assertTrue(sm.processEvent(type: .leftMouseDown, event: makeMouseEvent(type: .leftMouseDown, sourcePID: remotePID, subtype: 3), now: 1.8), "远程鼠标点击必须放行")
         print("PASS: testTrackpadBlockedWhileExternalMouseAllowed")
+    }
+
+    // 9. 应用内语言设置默认中文，可切换为英文并持久化、校验错误提示同步双语化
+    static func testLanguagePreferenceDefaultAndSwitch() {
+        let prefs = makeTestPreferences(suiteName: "CatKeyLock.test.9")
+        assertEqual(prefs.language, .zhHans, "首次未设置时默认语言应为简体中文")
+
+        var changeCount = 0
+        prefs.onChange = { changeCount += 1 }
+
+        prefs.language = .en
+        assertEqual(prefs.language, .en, "切换为英文后应成功读取")
+        assertEqual(changeCount, 1, "切换语言应触发 onChange 回调")
+
+        // 重新构造同一 suiteName 实例以验证 UserDefaults 持久化
+        let reloaded = AppPreferences(defaults: UserDefaults(suiteName: "CatKeyLock.test.9")!)
+        assertEqual(reloaded.language, .en, "语言设置应已持久化到 UserDefaults")
+
+        assertTrue(
+            KeyComboValidationError.modifierOnly.message(for: .zhHans).contains("请同时按下"),
+            "中文校验提示应为中文"
+        )
+        assertTrue(
+            KeyComboValidationError.modifierOnly.message(for: .en).contains("Please include"),
+            "英文校验提示应为英文"
+        )
+        print("PASS: testLanguagePreferenceDefaultAndSwitch")
     }
 }

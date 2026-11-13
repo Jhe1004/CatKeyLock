@@ -15,6 +15,7 @@ final class SettingsViewModel: ObservableObject {
         var lockLocalMouseToo: Bool = false
         var playSoundOnToggle: Bool = true
         var launchAtLogin: Bool = false
+        var language: AppLanguage = .zhHans
     }
 
     private let preferences: AppPreferences?
@@ -28,12 +29,28 @@ final class SettingsViewModel: ObservableObject {
     @Published var totalBlockedCount: Int = 0
     @Published var shortcut: KeyCombo = .defaultShortcut
     @Published var isRecordingShortcut: Bool = false
-    @Published var statusHintText: String = "按下该组合键即可瞬间锁定物理键盘，只有再次按下同一组合键才能解锁。"
-    @Published var statusHintIsError: Bool = false
+    @Published var language: AppLanguage = .zhHans
+    @Published private(set) var hintState: ShortcutHintState = .idle
     @Published var lockLocalMouseToo: Bool = false
     @Published var playSoundOnToggle: Bool = true
     @Published var launchAtLogin: Bool = false
-    @Published var launchErrorMessage: String?
+    @Published private var launchErrorDetail: String?
+
+    var statusHintText: String {
+        L10n.shortcutHint(state: hintState, language)
+    }
+
+    var statusHintIsError: Bool {
+        if case .validationError = hintState {
+            return true
+        }
+        return false
+    }
+
+    var launchErrorMessage: String? {
+        guard let detail = launchErrorDetail else { return nil }
+        return L10n.launchError(detail, language)
+    }
 
     init(preferences: AppPreferences, lockManager: KeyboardLockManager) {
         self.preferences = preferences
@@ -54,6 +71,7 @@ final class SettingsViewModel: ObservableObject {
         self.lockLocalMouseToo = previewState.lockLocalMouseToo
         self.playSoundOnToggle = previewState.playSoundOnToggle
         self.launchAtLogin = previewState.launchAtLogin
+        self.language = previewState.language
     }
 
     deinit {
@@ -70,9 +88,15 @@ final class SettingsViewModel: ObservableObject {
         if !isRecordingShortcut {
             shortcut = preferences.shortcut
         }
+        language = preferences.language
         lockLocalMouseToo = preferences.lockLocalMouseToo
         playSoundOnToggle = preferences.playSoundOnToggle
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
+    }
+
+    func setLanguage(_ newLanguage: AppLanguage) {
+        language = newLanguage
+        preferences?.language = newLanguage
     }
 
     func openAccessibilitySettings() {
@@ -102,8 +126,7 @@ final class SettingsViewModel: ObservableObject {
 
         isRecordingShortcut = true
         lockManager?.stateMachine.isRecordingShortcut = true
-        statusHintText = "请直接按下新组合键（至少包含 ⌃ / ⌥ / ⌘ 之一），按 Esc 取消。"
-        statusHintIsError = false
+        hintState = .recording
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isRecordingShortcut else { return event }
@@ -120,12 +143,10 @@ final class SettingsViewModel: ObservableObject {
                 self.shortcut = combo
                 self.preferences?.shortcut = combo
                 self.stopRecordingShortcut(resetHint: false)
-                self.statusHintText = "已更新为 \(combo.displayString)（\(combo.humanReadableDescription)）。"
-                self.statusHintIsError = false
+                self.hintState = .updated(combo)
                 self.refreshFromModel()
             case .failure(let error):
-                self.statusHintText = error.message
-                self.statusHintIsError = true
+                self.hintState = .validationError(error)
             }
 
             return nil
@@ -140,8 +161,7 @@ final class SettingsViewModel: ObservableObject {
             keyMonitor = nil
         }
         if resetHint {
-            statusHintText = "按下该组合键即可瞬间锁定物理键盘，只有再次按下同一组合键才能解锁。"
-            statusHintIsError = false
+            hintState = .idle
         }
     }
 
@@ -149,8 +169,7 @@ final class SettingsViewModel: ObservableObject {
         stopRecordingShortcut(resetHint: false)
         shortcut = .defaultShortcut
         preferences?.shortcut = .defaultShortcut
-        statusHintText = "已恢复默认组合键：\(KeyCombo.defaultShortcut.displayString)（\(KeyCombo.defaultShortcut.humanReadableDescription)）。"
-        statusHintIsError = false
+        hintState = .restoredDefault(.defaultShortcut)
         refreshFromModel()
     }
 
@@ -175,9 +194,9 @@ final class SettingsViewModel: ObservableObject {
             } else {
                 try SMAppService.mainApp.unregister()
             }
-            launchErrorMessage = nil
+            launchErrorDetail = nil
         } catch {
-            launchErrorMessage = "无法更新开机自动启动：\(error.localizedDescription)"
+            launchErrorDetail = error.localizedDescription
         }
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
     }
@@ -190,10 +209,16 @@ struct SettingsContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            TopUtilityBar(
+                language: viewModel.language,
+                onSelectLanguage: { viewModel.setLanguage($0) }
+            )
+
             HeroStatusBanner(
                 isLocked: viewModel.isLocked,
                 shortcutDisplay: viewModel.shortcut.displayString,
                 isReady: viewModel.isAccessibilityGranted && viewModel.isTapActive,
+                language: viewModel.language,
                 onToggleLock: { viewModel.toggleLock() }
             )
 
@@ -201,20 +226,21 @@ struct SettingsContentView: View {
                 StatMiniCard(
                     symbolName: "pawprint.fill",
                     symbolColor: .orange,
-                    title: "本次锁定拦截",
-                    value: "\(viewModel.sessionBlockedCount) 次"
+                    title: L10n.statSessionTitle(viewModel.language),
+                    value: L10n.statCountValue(viewModel.sessionBlockedCount, viewModel.language)
                 )
                 StatMiniCard(
                     symbolName: "shield.checkered",
                     symbolColor: .blue,
-                    title: "累计防猫拦截",
-                    value: "\(viewModel.totalBlockedCount) 次"
+                    title: L10n.statTotalTitle(viewModel.language),
+                    value: L10n.statCountValue(viewModel.totalBlockedCount, viewModel.language)
                 )
             }
 
             PermissionStatusCard(
                 isGranted: viewModel.isAccessibilityGranted,
                 isTapActive: viewModel.isTapActive,
+                language: viewModel.language,
                 onOpenSettings: { viewModel.openAccessibilitySettings() },
                 onResetPermission: { viewModel.resetAccessibilityPermission() }
             )
@@ -224,15 +250,83 @@ struct SettingsContentView: View {
                 isRecording: viewModel.isRecordingShortcut,
                 hintText: viewModel.statusHintText,
                 hintIsError: viewModel.statusHintIsError,
+                language: viewModel.language,
                 onRecordToggle: { viewModel.startOrCancelRecording() },
                 onResetDefault: { viewModel.resetShortcutToDefault() }
             )
 
             PreferencesGroupCard(viewModel: viewModel)
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 20)
         .frame(width: 500)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+private struct TopUtilityBar: View {
+    let language: AppLanguage
+    let onSelectLanguage: (AppLanguage) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(L10n.versionBadge)
+                .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            HStack(spacing: 2) {
+                Image(systemName: "globe")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 7)
+                    .padding(.trailing, 3)
+
+                LanguageSegmentButton(
+                    title: "中文",
+                    isSelected: language == .zhHans,
+                    action: { onSelectLanguage(.zhHans) }
+                )
+
+                LanguageSegmentButton(
+                    title: "EN",
+                    isSelected: language == .en,
+                    action: { onSelectLanguage(.en) }
+                )
+            }
+            .padding(2.5)
+            .background(
+                Capsule()
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: 1)
+            )
+        }
+    }
+}
+
+private struct LanguageSegmentButton: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3.5)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? Color.accentColor : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -240,6 +334,7 @@ private struct HeroStatusBanner: View {
     let isLocked: Bool
     let shortcutDisplay: String
     let isReady: Bool
+    let language: AppLanguage
     let onToggleLock: () -> Void
 
     private var gradientColors: [Color] {
@@ -267,26 +362,22 @@ private struct HeroStatusBanner: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(isLocked ? "防猫模式运行中 · 键盘已锁定" : "本地键盘正常输入中")
+                Text(L10n.heroTitle(locked: isLocked, language))
                     .font(.system(size: 16.5, weight: .bold))
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(
-                    isLocked
-                        ? "远程控制正常可用 · 再按 \(shortcutDisplay) 解锁"
-                        : "防猫待命 · 按 \(shortcutDisplay) 瞬间锁定物理键盘"
-                )
-                .font(.system(size: 12.5))
-                .foregroundStyle(Color.white.opacity(0.88))
-                .fixedSize(horizontal: false, vertical: true)
+                Text(L10n.heroSubtitle(locked: isLocked, shortcut: shortcutDisplay, language))
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Color.white.opacity(0.88))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 8)
 
             let canInteract = isReady || isLocked
             Button(action: onToggleLock) {
-                Text(isLocked ? "解锁键盘" : (canInteract ? "立即锁定" : "待授权"))
+                Text(L10n.heroActionTitle(locked: isLocked, canInteract: canInteract, language))
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundStyle(
                         !canInteract
@@ -359,6 +450,7 @@ private struct StatMiniCard: View {
 private struct PermissionStatusCard: View {
     let isGranted: Bool
     let isTapActive: Bool
+    let language: AppLanguage
     let onOpenSettings: () -> Void
     let onResetPermission: () -> Void
 
@@ -371,13 +463,13 @@ private struct PermissionStatusCard: View {
                     .font(.system(size: 15))
                     .foregroundStyle(.green)
 
-                Text("辅助功能权限已就绪 · 全局锁键监听运行中")
+                Text(L10n.permReadyText(language))
                     .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(.primary)
 
                 Spacer()
 
-                Text("远控自动放行")
+                Text(L10n.permRemoteBadge(language))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.green)
                     .padding(.horizontal, 8)
@@ -401,11 +493,11 @@ private struct PermissionStatusCard: View {
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(isGranted ? "已获授权，等待事件监听器重连" : "需要开启 macOS 辅助功能权限")
+                    Text(L10n.permPendingTitle(isGranted: isGranted, language))
                         .font(.system(size: 13.5, weight: .semibold))
                         .foregroundStyle(.primary)
 
-                    Text("请在“系统设置 → 隐私与安全性 → 辅助功能”中开启「CatKeyLock」开关（开启后 1 秒内自动生效；若开关已开启但仍不生效，请点击右侧“重置记录”重新弹窗授权）。")
+                    Text(L10n.permPendingBody(language))
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -414,12 +506,12 @@ private struct PermissionStatusCard: View {
                 Spacer(minLength: 6)
 
                 VStack(spacing: 6) {
-                    Button("去开启权限", action: onOpenSettings)
+                    Button(L10n.permOpenButton(language), action: onOpenSettings)
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
                         .controlSize(.small)
 
-                    Button("重置记录", action: onResetPermission)
+                    Button(L10n.permResetButton(language), action: onResetPermission)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }
@@ -443,6 +535,7 @@ private struct ShortcutKeycapCard: View {
     let isRecording: Bool
     let hintText: String
     let hintIsError: Bool
+    let language: AppLanguage
     let onRecordToggle: () -> Void
     let onResetDefault: () -> Void
 
@@ -452,17 +545,17 @@ private struct ShortcutKeycapCard: View {
                 Image(systemName: "keyboard.fill")
                     .font(.system(size: 13.5))
                     .foregroundStyle(.blue)
-                Text("锁定 / 解锁组合键")
+                Text(L10n.shortcutCardTitle(language))
                     .font(.system(size: 13.5, weight: .semibold))
 
                 Spacer()
 
-                Button("恢复默认", action: onResetDefault)
+                Button(L10n.shortcutResetDefault(language), action: onResetDefault)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
 
                 Button(action: onRecordToggle) {
-                    Text(isRecording ? "取消录制 (Esc)" : "录制新组合键")
+                    Text(L10n.shortcutRecordButton(isRecording: isRecording, language))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(isRecording ? .orange : .accentColor)
@@ -485,7 +578,7 @@ private struct ShortcutKeycapCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: "record.circle")
                             .foregroundStyle(.orange)
-                        Text("请按下包含 ⌃ / ⌥ / ⌘ 的新组合键…（按 Esc 取消）")
+                        Text(L10n.shortcutRecordingPlaceholder(language))
                             .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(.orange)
                     }
@@ -560,8 +653,8 @@ private struct PreferencesGroupCard: View {
             OptionRow(
                 symbolName: "hand.tap.fill",
                 iconColor: .purple,
-                title: "同时屏蔽内置触控板",
-                subtitle: "防猫踩踏触控板误触；外接鼠标与远程控制鼠标均正常可用",
+                title: L10n.optTrackpadTitle(viewModel.language),
+                subtitle: L10n.optTrackpadSubtitle(viewModel.language),
                 isOn: Binding(
                     get: { viewModel.lockLocalMouseToo },
                     set: { viewModel.setLockLocalMouseToo($0) }
@@ -574,8 +667,8 @@ private struct PreferencesGroupCard: View {
             OptionRow(
                 symbolName: "speaker.wave.2.fill",
                 iconColor: .teal,
-                title: "切换状态时播放轻柔提示音",
-                subtitle: "锁定时播放清脆提示音，解锁时播放柔和音效",
+                title: L10n.optSoundTitle(viewModel.language),
+                subtitle: L10n.optSoundSubtitle(viewModel.language),
                 isOn: Binding(
                     get: { viewModel.playSoundOnToggle },
                     set: { viewModel.setPlaySoundOnToggle($0) }
@@ -588,8 +681,8 @@ private struct PreferencesGroupCard: View {
             OptionRow(
                 symbolName: "bolt.horizontal.circle.fill",
                 iconColor: .green,
-                title: "开机登录时自动启动",
-                subtitle: "登录桌面后静默驻留右上角菜单栏随时待命",
+                title: L10n.optLoginTitle(viewModel.language),
+                subtitle: L10n.optLoginSubtitle(viewModel.language),
                 isOn: Binding(
                     get: { viewModel.launchAtLogin },
                     set: { viewModel.setLaunchAtLogin($0) }
@@ -671,12 +764,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         self.hostingController = hc
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 590),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 610),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
-        window.title = "防猫锁键 (CatKeyLock)"
+        window.title = L10n.windowTitle(vm.language)
         window.isReleasedWhenClosed = false
         window.contentViewController = hc
 
@@ -705,6 +798,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
     func refreshUI() {
         viewModel.refreshFromModel()
+        window?.title = L10n.windowTitle(viewModel.language)
         updateWindowSizeToFit()
     }
 
