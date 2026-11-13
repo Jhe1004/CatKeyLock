@@ -32,7 +32,7 @@ struct CoverPosterView: View {
                     Image(systemName: "pawprint.fill")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Color(red: 1.0, green: 0.68, blue: 0.28))
-                    Text("macOS Anti-Cat Defense System")
+                    Text("macOS HID Input Isolation Utility")
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.45))
                 }
@@ -63,15 +63,15 @@ struct CoverPosterView: View {
 
                 Spacer().frame(height: 10)
 
-                // 俏皮中文副标题
-                Text("防猫锁键 · 守护人类最后一行代码")
-                    .font(.system(size: 26, weight: .bold))
+                // 中文副标题
+                Text("面向偶发性猫科动物接触的输入层隔离工具")
+                    .font(.system(size: 23.5, weight: .bold))
                     .foregroundStyle(.white.opacity(0.95))
                     .shadow(color: .black.opacity(0.45), radius: 6, x: 0, y: 2)
 
                 Spacer().frame(height: 14)
 
-                Text("一键封印物理键盘与内置触控板，\n外接鼠标 & 远程控制（ToDesk / UU）照常丝滑！")
+                Text("基于 Quartz Event Tap 实现硬件输入源精准分流：\n阻断内置键盘与触控板载荷，保留外接鼠标与远程会话控制。")
                     .font(.system(size: 16, weight: .medium))
                     .lineSpacing(5)
                     .foregroundStyle(Color.white.opacity(0.76))
@@ -102,14 +102,14 @@ struct CoverPosterView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.orange.opacity(0.85))
-                    Text("暗号解锁 · 猫踩无效 · 自带防卡键黑科技")
+                    Text("PID 级硬件/远控分流 · 触控子类型判别 · 修饰键渐进释放")
                         .font(.system(size: 13.5, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.70))
                 }
             }
             .padding(.leading, 56)
             .padding(.vertical, 56)
-            .frame(maxWidth: 580, alignment: .leading)
+            .frame(maxWidth: 600, alignment: .leading)
         }
         .frame(width: 1280, height: 640)
     }
