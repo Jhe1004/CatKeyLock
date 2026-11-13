@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CoverPosterView: View {
     let backgroundImage: NSImage
+    var isEnglish: Bool = false
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -63,17 +64,27 @@ struct CoverPosterView: View {
 
                 Spacer().frame(height: 10)
 
-                // 中文副标题
-                Text("面向偶发性猫科动物接触的输入层隔离工具")
-                    .font(.system(size: 23.5, weight: .bold))
+                // 副标题
+                Text(
+                    isEnglish
+                        ? "Selective Input-Layer Isolation Against\nStochastic Feline (Felis catus) Contact"
+                        : "面向偶发性猫科动物接触的输入层隔离工具"
+                )
+                    .font(.system(size: isEnglish ? 20.5 : 23.5, weight: .bold))
+                    .lineSpacing(3)
                     .foregroundStyle(.white.opacity(0.95))
                     .shadow(color: .black.opacity(0.45), radius: 6, x: 0, y: 2)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Spacer().frame(height: 14)
 
-                Text("基于 Quartz Event Tap 实现硬件输入源精准分流：\n阻断内置键盘与触控板载荷，保留外接鼠标与远程会话控制。")
-                    .font(.system(size: 16, weight: .medium))
-                    .lineSpacing(5)
+                Text(
+                    isEnglish
+                        ? "Quartz Event Tap routing that drops built-in keyboard & trackpad\nloads while preserving external mice and remote desktop sessions."
+                        : "基于 Quartz Event Tap 实现硬件输入源精准分流：\n阻断内置键盘与触控板载荷，保留外接鼠标与远程会话控制。"
+                )
+                    .font(.system(size: isEnglish ? 14.5 : 16, weight: .medium))
+                    .lineSpacing(isEnglish ? 4 : 5)
                     .foregroundStyle(Color.white.opacity(0.76))
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -102,8 +113,12 @@ struct CoverPosterView: View {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.orange.opacity(0.85))
-                    Text("PID 级硬件/远控分流 · 触控子类型判别 · 修饰键渐进释放")
-                        .font(.system(size: 13.5, weight: .medium))
+                    Text(
+                        isEnglish
+                            ? "PID-Based HID Routing · Subtype Discrimination · Modifier Drain"
+                            : "PID 级硬件/远控分流 · 触控子类型判别 · 修饰键渐进释放"
+                    )
+                        .font(.system(size: isEnglish ? 13 : 13.5, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.70))
                 }
             }
@@ -156,12 +171,14 @@ private struct CoverKeycap: View {
 }
 
 guard CommandLine.arguments.count >= 3 else {
-    fputs("Usage: make_readme_assets.swift <input_bg> <output_cover.png>\n", stderr)
+    fputs("Usage: make_readme_assets.swift <input_bg> <output_cover.png> [zh|en]\n", stderr)
     exit(1)
 }
 
 let inputURL = URL(fileURLWithPath: CommandLine.arguments[1])
 let outputURL = URL(fileURLWithPath: CommandLine.arguments[2])
+let lang = CommandLine.arguments.count >= 4 ? CommandLine.arguments[3].lowercased() : "zh"
+let isEnglish = (lang == "en")
 
 guard let bgImage = NSImage(contentsOf: inputURL) else {
     fputs("Failed to load background image at \(inputURL.path)\n", stderr)
@@ -172,7 +189,7 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 NSApp.appearance = NSAppearance(named: .darkAqua)
 
-let hosting = NSHostingView(rootView: CoverPosterView(backgroundImage: bgImage))
+let hosting = NSHostingView(rootView: CoverPosterView(backgroundImage: bgImage, isEnglish: isEnglish))
 hosting.frame = NSRect(x: 0, y: 0, width: 1280, height: 640)
 hosting.layoutSubtreeIfNeeded()
 
